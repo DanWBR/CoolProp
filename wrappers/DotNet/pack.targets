@@ -1,0 +1,84 @@
+<Project>
+
+  <!-- Where the RID-keyed natives live. Locally this is what the CMake install
+       target writes; in CI it is the `runtimes` artifact from
+       library_shared.yml unpacked at the repository root. -->
+  <PropertyGroup>
+    <NativeAssetsRoot Condition="'$(NativeAssetsRoot)' == ''">$(MSBuildThisFileDirectory)..\..\install_root\runtimes</NativeAssetsRoot>
+  </PropertyGroup>
+
+  <!-- Derive the package version from CMakeLists.txt so it cannot drift from the
+       native library it ships. COOLPROP_VERSION_REVISION is a prerelease tag
+       ("dev"), appended as a SemVer suffix when non-empty. -->
+  <PropertyGroup>
+    <_CoolPropCMakeLists>$(MSBuildThisFileDirectory)..\..\CMakeLists.txt</_CoolPropCMakeLists>
+    <_CoolPropCMakeText>$([System.IO.File]::ReadAllText($(_CoolPropCMakeLists)))</_CoolPropCMakeText>
+    <_CoolPropMajor>$([System.Text.RegularExpressions.Regex]::Match($(_CoolPropCMakeText), 'COOLPROP_VERSION_MAJOR[ \t]+([0-9]+)').Groups.get_Item(1).Value)</_CoolPropMajor>
+    <_CoolPropMinor>$([System.Text.RegularExpressions.Regex]::Match($(_CoolPropCMakeText), 'COOLPROP_VERSION_MINOR[ \t]+([0-9]+)').Groups.get_Item(1).Value)</_CoolPropMinor>
+    <_CoolPropPatch>$([System.Text.RegularExpressions.Regex]::Match($(_CoolPropCMakeText), 'COOLPROP_VERSION_PATCH[ \t]+([0-9]+)').Groups.get_Item(1).Value)</_CoolPropPatch>
+    <_CoolPropRevision>$([System.Text.RegularExpressions.Regex]::Match($(_CoolPropCMakeText), 'COOLPROP_VERSION_REVISION[ \t]+([A-Za-z0-9]*)').Groups.get_Item(1).Value)</_CoolPropRevision>
+
+    <Version Condition="'$(_CoolPropMajor)' != '' and '$(_CoolPropRevision)' == ''">$(_CoolPropMajor).$(_CoolPropMinor).$(_CoolPropPatch)</Version>
+    <Version Condition="'$(_CoolPropMajor)' != '' and '$(_CoolPropRevision)' != ''">$(_CoolPropMajor).$(_CoolPropMinor).$(_CoolPropPatch)-$(_CoolPropRevision)</Version>
+  </PropertyGroup>
+
+  <Target Name="ValidateCoolPropVersion" BeforeTargets="GenerateNuspec">
+    <Error Condition="'$(_CoolPropMajor)' == ''"
+           Text="Could not read COOLPROP_VERSION_MAJOR from $(_CoolPropCMakeLists). Packing would silently produce a 1.0.0 package unrelated to the native library version." />
+  </Target>
+
+  <!-- The RIDs the package promises. Listed explicitly rather than globbed:
+       a 32-bit build also writes runtimes/win-x86, which is out of scope and
+       whose stdcall and cdecl variants overwrite each other. -->
+  <ItemGroup>
+    <CoolPropRequiredRid Include="win-x64" />
+    <CoolPropRequiredRid Include="win-arm64" />
+    <CoolPropRequiredRid Include="linux-x64" />
+    <CoolPropRequiredRid Include="linux-arm64" />
+    <CoolPropRequiredRid Include="osx-x64" />
+    <CoolPropRequiredRid Include="osx-arm64" />
+  </ItemGroup>
+
+  <!--
+    Refuse to build a package that silently omits an architecture.
+
+    Batched over CoolPropRequiredRid so the target runs once per RID. The test
+    is "does this directory contain at least one file", NOT Exists() on the
+    directory: an empty runtimes/linux-arm64/native — exactly what a partially
+    downloaded or half-failed CI artifact leaves behind — passes an Exists()
+    check and ships a package that throws DllNotFoundException on that platform.
+  -->
+  <Target Name="ValidateCoolPropRids"
+          BeforeTargets="GenerateNuspec"
+          Outputs="%(CoolPropRequiredRid.Identity)">
+    <PropertyGroup>
+      <_Rid>%(CoolPropRequiredRid.Identity)</_Rid>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_RidNative Remove="@(_RidNative)" />
+      <_RidNative Include="$(NativeAssetsRoot)\$(_Rid)\native\*" />
+    </ItemGroup>
+
+    <Error Condition="'@(_RidNative)' == ''"
+           Text="No native library for RID '$(_Rid)'. Expected at least one file in $(NativeAssetsRoot)\$(_Rid)\native\. Build the missing architecture, or unpack the 'runtimes' artifact from library_shared.yml at the repository root. Packing without it would ship a package that fails at run time on $(_Rid)." />
+  </Target>
+
+  <!-- runtimes/<rid>/native/ is the layout NuGet resolves automatically: a
+       win-arm64 app gets the arm64 binary with no resolver and no manual copy. -->
+  <Target Name="AddCoolPropNativesToPackage"
+          BeforeTargets="_GetPackageFiles"
+          Outputs="%(CoolPropRequiredRid.Identity)">
+    <PropertyGroup>
+      <_PackRid>%(CoolPropRequiredRid.Identity)</_PackRid>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <None Include="$(NativeAssetsRoot)\$(_PackRid)\native\*"
+            Pack="true"
+            PackagePath="runtimes/$(_PackRid)/native/"
+            Visible="false" />
+    </ItemGroup>
+  </Target>
+
+</Project>

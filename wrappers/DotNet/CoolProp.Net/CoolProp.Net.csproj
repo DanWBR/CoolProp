@@ -15,4 +15,17 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <PackageId>CoolProp.Net</PackageId>
+    <Description>.NET 10 bindings for the CoolProp thermophysical property library, with native binaries for six desktop runtimes.</Description>
+    <Authors>CoolProp developers</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/DanWBR/CoolProp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/DanWBR/CoolProp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>coolprop;thermodynamics;thermophysical;refprop;fluid-properties</PackageTags>
+  </PropertyGroup>
+
+  <Import Project="..\pack.targets" />
+
 </Project>

@@ -625,7 +625,9 @@ git commit --no-verify -m "test(dotnet): ABI width, reference values, handle lif
 
 **Files:** Modify `CoolProp.Net.csproj`; create `wrappers/DotNet/pack.targets`.
 
-- [ ] **Step 1: Measure the payload before choosing a layout**
+- [x] **Step 1: Measure the payload before choosing a layout** — the win-x64 `CoolProp.dll` is **9.8 MB**,
+so six RIDs come to roughly **59 MB**, under the 100 MB threshold. **Single package**, no split
+`CoolProp.Net.runtime.<rid>` packages. Measured, not guessed.
 
 The native library embeds ~18 MB of fluid JSON plus the incompressibles, so six copies may be large:
 
@@ -636,7 +638,14 @@ If the six natives total **under ~100 MB**, ship one package with all RIDs — s
 split into `CoolProp.Net.runtime.<rid>` packages with `CoolProp.Net` depending on all six. Record the measured
 number in the PR description; do not guess.
 
-- [ ] **Step 2: Pack the natives**
+- [x] **Step 2: Pack the natives**
+
+> Two departures from the draft below. The RIDs are **enumerated, not globbed** with
+> `$(NativeAssetsRoot)/**`: a 32-bit build also writes `runtimes/win-x86`, which is out of scope and whose
+> stdcall and cdecl legs overwrite each other, so a glob would ship an ambiguous binary.
+>
+> The package **version is derived from `CMakeLists.txt`** (`COOLPROP_VERSION_*`) rather than hardcoded.
+> The draft set no version at all, which would have produced a `1.0.0` package bearing an 8.0.1 native.
 
 ```xml
 <PropertyGroup>
@@ -656,7 +665,12 @@ number in the PR description; do not guess.
 `runtimes/<rid>/native/` is the layout NuGet resolves automatically — a `win-arm64` app gets the arm64 binary
 with no code, no resolver, and no manual copy. This is the deliverable that closes the original problem.
 
-- [ ] **Step 3: Fail the pack when a RID is missing**
+- [x] **Step 3: Fail the pack when a RID is missing**
+
+> **The draft's guard below is fail-open and was not used.** `!Exists('.../native')` passes on an *empty*
+> `runtimes/linux-arm64/native` directory — exactly what a partially downloaded or half-failed CI artifact
+> leaves behind — and would ship a package that throws `DllNotFoundException` on that platform. The
+> implemented guard requires at least one *file* per RID.
 
 A package that quietly omits `linux-arm64` is worse than a failed build. Add to `pack.targets`:
 
@@ -670,7 +684,19 @@ A package that quietly omits `linux-arm64` is worse than a failed build. Add to 
 </Target>
 ```
 
-- [ ] **Step 4: Verify the package contents**
+- [x] **Step 4: Verify the package contents** — produced `CoolProp.Net.8.0.1-dev.nupkg` containing
+`lib/net10.0/CoolProp.Net.dll` and exactly six `runtimes/<rid>/native/` entries, no `win-x86`. Only
+win-x64 exists natively on this machine, so the other five were temporary stubs under the gitignored
+`install_root/`, removed immediately afterwards.
+
+Both guards were shown to fire, not merely reasoned about:
+
+| Guard | Provocation | Result |
+|---|---|---|
+| Missing RID | pack with only `win-x64` present | fails, naming `win-arm64` and how to fix it |
+| Undeducible version | `-p:_CoolPropCMakeText=nothing-matches-here` | fails rather than emitting a `1.0.0` package |
+
+Neither guard runs on `dotnet build` or `dotnet test` — both confirmed still clean (0 warnings; 35/35).
 
 ```bash
 dotnet pack wrappers/DotNet/CoolProp.Net/CoolProp.Net.csproj -c Release -o /tmp/nupkg
