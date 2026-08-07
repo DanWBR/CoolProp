@@ -807,12 +807,26 @@ git commit --no-verify -m "ci(dotnet): test on x64+arm64, AOT probe, pack, colle
 
 ## Task 10: Documentation
 
-- [ ] **Step 1:** `wrappers/DotNet/README.md` — install, a `PropsSI` sample, an `AbstractState` sample,
+- [x] **Step 1:** `wrappers/DotNet/README.md` — install, a `PropsSI` sample, an `AbstractState` sample,
       the supported RID table, and an explicit note that `win-x86` is unsupported.
-- [ ] **Step 2:** `Web/coolprop/changelog.rst` — new-feature entry for the .NET 10 package under `8.0.0`,
+
+> **Every code sample in the README was executed**, not just written: all five blocks run against the
+> locally built native library. A README whose samples do not compile is worse than no README. The
+> `AbstractState` block also happens to check itself — `FirstPartialDeriv("Hmolar","T","P")` returns
+> 75.3153, matching `Cpmolar` 75.315, which is the definition of *c*<sub>p</sub>.
+>
+> The README also carries the implementation notes a future maintainer needs and cannot recover from the
+> code alone: why `CLong`, why the `SafeHandle` sentinel is -1, that the native return conventions are not
+> uniform, and why the Fortran shims are unbound.
+
+- [x] **Step 2:** `Web/coolprop/changelog.rst` — new-feature entry for the .NET 10 package under `8.0.0`,
       plus a bugfix entry for the Linux/macOS arm64-vs-x64 install-path collision (Defect 1), which affected
       the existing shared-library artifacts independently of .NET.
-- [ ] **Step 3: Commit**
+
+> `docutils` is not installed here, so the RST was checked for balanced inline markup rather than fully
+> parsed. Both added lines balance.
+
+- [x] **Step 3: Commit**
 
 ```bash
 git add wrappers/DotNet/README.md Web/coolprop/changelog.rst
