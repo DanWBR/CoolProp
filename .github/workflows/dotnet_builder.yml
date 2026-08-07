@@ -1,0 +1,188 @@
+name: .NET wrapper
+
+# Runs off the back of "Library builds (shared)" rather than on its own push
+# trigger. That workflow is tag-only, so this one is effectively tag-only too,
+# and it consumes the natives from the exact run that produced them instead of
+# racing a concurrently-running build or picking up a stale artifact.
+on:
+  workflow_run:
+    workflows: ["Library builds (shared)"]
+    types: [completed]
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    # A failed native build must not silently produce a green .NET run.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-24.04-arm is the leg that matters most: C long is 8 bytes on
+        # LP64 and 4 on Windows, so a wrong CLong mapping passes everywhere
+        # except here and on the other Unix legs.
+        os: [windows-latest, ubuntu-latest, ubuntu-24.04-arm, macOS-latest]
+
+    steps:
+    # workflow_run checks out the default branch by default, NOT the commit that
+    # triggered the upstream build. Pin it explicitly or the tested source can
+    # differ from the natives being tested.
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+    - uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Download natives from the triggering run
+      if: ${{ github.event_name == 'workflow_run' }}
+      uses: dawidd6/action-download-artifact@v21
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        run_id: ${{ github.event.workflow_run.id }}
+        name: runtimes
+        path: install_root/runtimes
+        if_no_artifact_found: fail
+
+    - name: Download natives from the last successful library build
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      uses: dawidd6/action-download-artifact@v21
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        workflow: library_shared.yml
+        workflow_conclusion: success
+        name: runtimes
+        path: install_root/runtimes
+        if_no_artifact_found: fail
+
+    # Resolved once and guarded: an empty rid would make every path check below
+    # collapse to "install_root/runtimes/", which exists, so the guards would
+    # pass while testing nothing.
+    - name: Resolve this runner's RID
+      shell: bash
+      run: |
+        set -euo pipefail
+        rid=$(dotnet --info | sed -n 's/^ *RID: *//p' | head -1)
+        if [ -z "$rid" ]; then
+          echo "FAIL: could not read a RID out of 'dotnet --info'" >&2
+          exit 1
+        fi
+        echo "COOLPROP_RUNNER_RID=$rid" >> "$GITHUB_ENV"
+        echo "Runner RID: $rid"
+
+    # The artifact is the merged six-RID tree; this leg needs its own. Tested
+    # with compgen rather than -d because an empty directory — what a partially
+    # uploaded artifact leaves behind — passes a directory-exists check.
+    - name: Verify the native for this RID is present
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "Available RIDs:"
+        ls install_root/runtimes
+        dir="install_root/runtimes/$COOLPROP_RUNNER_RID/native"
+        if ! compgen -G "$dir/*" > /dev/null; then
+          echo "FAIL: no native library in $dir" >&2
+          exit 1
+        fi
+        ls -l "$dir"
+
+    - name: Build
+      run: dotnet build wrappers/DotNet/CoolProp.Net/CoolProp.Net.csproj -c Release
+
+    - name: Test
+      run: dotnet test wrappers/DotNet/CoolProp.Net.Tests -c Release --logger "console;verbosity=normal"
+
+    # ILCompiler shells out to clang and needs zlib headers to link on Linux.
+    - name: Install NativeAOT prerequisites (Linux)
+      if: runner.os == 'Linux'
+      run: sudo apt-get update -y && sudo apt-get install -y clang zlib1g-dev
+
+    - name: NativeAOT probe
+      shell: bash
+      run: |
+        set -euo pipefail
+        rid="$COOLPROP_RUNNER_RID"
+        dotnet publish wrappers/DotNet/CoolProp.Net.AotProbe -c Release -r "$rid"
+        exe="wrappers/DotNet/CoolProp.Net.AotProbe/bin/Release/net10.0/$rid/publish/CoolProp.Net.AotProbe"
+        if [ -f "$exe.exe" ]; then
+          exe="$exe.exe"
+        fi
+        if [ ! -f "$exe" ]; then
+          echo "FAIL: AOT publish produced no executable at $exe" >&2
+          exit 1
+        fi
+        # The probe exits non-zero when a value disagrees with its reference.
+        "$exe"
+
+  pack:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+    - uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Download natives from the triggering run
+      if: ${{ github.event_name == 'workflow_run' }}
+      uses: dawidd6/action-download-artifact@v21
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        run_id: ${{ github.event.workflow_run.id }}
+        name: runtimes
+        path: install_root/runtimes
+        if_no_artifact_found: fail
+
+    - name: Download natives from the last successful library build
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      uses: dawidd6/action-download-artifact@v21
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        workflow: library_shared.yml
+        workflow_conclusion: success
+        name: runtimes
+        path: install_root/runtimes
+        if_no_artifact_found: fail
+
+    # pack.targets refuses to build a package that is missing any of the six
+    # RIDs, so this step is where an incomplete native build stops.
+    - name: Pack
+      run: dotnet pack wrappers/DotNet/CoolProp.Net/CoolProp.Net.csproj -c Release -o nupkg
+
+    - name: Show package contents
+      shell: bash
+      run: |
+        set -euo pipefail
+        ls -l nupkg
+        for p in nupkg/*.nupkg; do
+          echo "--- $p ---"
+          unzip -l "$p" | grep -E 'runtimes|lib/'
+        done
+
+    - name: Upload the NuGet package
+      uses: actions/upload-artifact@v7
+      with:
+        name: CoolProp.Net-nupkg
+        path: nupkg/*.nupkg
+
+    # The six native libraries on their own, for consumers that want to drop
+    # them into an existing application rather than take the NuGet package.
+    - name: Upload the native libraries
+      uses: actions/upload-artifact@v7
+      with:
+        name: CoolProp-natives
+        path: install_root/runtimes

@@ -779,22 +779,57 @@ git commit --no-verify -m "test(dotnet): NativeAOT publish probe"
 
 **Files:** Create `.github/workflows/dotnet_builder.yml`.
 
-- [ ] **Step 1: Wire the workflow**
+- [x] **Step 1: Wire the workflow** — **written but NOT executed.** GitHub Actions has never run in this
+fork (0 runs across 20 workflows), so nothing below has been validated against a real runner. Treat every
+claim in this task as unverified until a run exists.
 
 It must (a) download the merged `runtimes` artifact from `library_shared.yml`, (b) `dotnet test` on
 `ubuntu-latest`, `windows-latest`, `macos-latest` **and** `ubuntu-24.04-arm` — the arm64 leg is the one that
 would have caught a `CLong` mistake — (c) run the AOT probe, (d) `dotnet pack`, (e) upload the `.nupkg`.
 
-- [ ] **Step 2: Lint**
+> **Cost: triggers are tag-only.** `library_shared.yml` no longer fires on pushes to branches or on pull
+> requests — it compiles the full C++ library on five runners, which is far too expensive per push. It now
+> runs on `v*` tags and `workflow_dispatch` only. `dotnet_builder.yml` has no push trigger at all: it hangs
+> off `workflow_run` of "Library builds (shared)", so it inherits the tag-only cadence and — more
+> importantly — consumes the natives from the *exact* run that produced them, rather than racing a
+> concurrent build or picking up a stale artifact.
+>
+> **`workflow_run` checks out the default branch, not the triggering commit.** Both jobs pin
+> `ref: ${{ github.event.workflow_run.head_sha }}`; without it the tested source can differ from the
+> natives being tested.
+>
+> Two fail-open traps were found and closed while writing this:
+> - `rid=$(dotnet --info | sed -n 's/^ *RID: *//p')` returning empty would make every later path collapse
+>   to `install_root/runtimes/`, which exists — so the guards would pass while testing nothing. The RID is
+>   now resolved once, with an explicit empty check.
+> - The native presence check uses `compgen -G "$dir/*"`, not `[ -d ]`: an empty directory, which is what a
+>   partially uploaded artifact leaves behind, passes a directory-exists test.
+>
+> Also fixed: `[ -f "$exe.exe" ] && exe="$exe.exe"` would abort the step under `set -e` on Linux, where no
+> `.exe` exists. And the Linux legs install `clang` and `zlib1g-dev`, which ILCompiler needs to link.
+
+**Known risk, unverified:** on Linux the CMake install produces `libCoolProp.so` as a symlink to
+`libCoolProp.so.<version>`. GitHub artifacts do not preserve symlinks; if the link is materialized as a
+copy the load still works, but if it is dropped, `DllImport("CoolProp")` will not resolve. The first real
+run will show which.
+
+- [x] **Step 2: Lint**
 
 ```bash
 python -c "import yaml; yaml.safe_load(open('.github/workflows/dotnet_builder.yml')); print('YAML OK')"
 ```
 
-- [ ] **Step 3: Register in the release pipeline**
+- [x] **Step 3: Register in the release pipeline**
 
 Add `dotnet_builder.yml` to the `collect_binaries` matrix in
 `.github/workflows/release_all_files.yml:73`.
+
+> **Not done, and out of scope:** 14 other workflows still trigger on pushes to branches —
+> `dev_checks`, `dev_msvc`, `docs_devdocs-run`, `docs_docker-build`, `docs_docker-run`, `gui_builder`,
+> `java_builder`, `javascript_builder`, `libreoffice_builder`, `mathcad_builder`, `python_buildwheels`,
+> `release_all_files`, `test_catch2`, `windows_installer`. Enabling Actions will fire all of them on the
+> next push. Only the two workflows this plan owns were made tag-only; restricting the rest is a
+> repository-wide decision for the owner.
 
 - [ ] **Step 4: Commit**
 

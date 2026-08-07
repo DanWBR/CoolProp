@@ -1,11 +1,11 @@
 name: Library builds (shared)
 
+# Tags and manual runs only. This workflow compiles the full C++ library on
+# five runners, so firing it on every push is expensive for little signal.
 on:
   push:
-    branches: [ 'master', 'main', 'develop', 'actions_shared' ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ 'master', 'main', 'develop' ]
+  workflow_dispatch:
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
