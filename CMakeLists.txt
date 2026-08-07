@@ -878,18 +878,30 @@ if(COOLPROP_OBJECT_LIBRARY
     target_include_directories(${LIB_NAME} PUBLIC ${APP_INCLUDE_DIRS})
   endif()
 
-  # Set the bitness
+  # Set the bitness.
+  #
+  # -m32/-m64 select the x86 sub-architecture and exist only on x86 compilers.
+  # On aarch64 GCC they are hard errors ("unrecognized command-line option
+  # '-m64'"), which broke every native arm64 Linux build. Bitness there is a
+  # property of the toolchain, not a flag, so emit nothing.
   if(NOT MSVC)
     if(NOT "${BITNESS}" STREQUAL "NATIVE")
-      message(STATUS "Setting bitness flag -m${BITNESS}")
-      set_property(
-        TARGET ${LIB_NAME}
-        APPEND_STRING
-        PROPERTY COMPILE_FLAGS " -m${BITNESS}")
-      set_property(
-        TARGET ${LIB_NAME}
-        APPEND_STRING
-        PROPERTY LINK_FLAGS " -m${BITNESS}")
+      string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _cp_host_arch)
+      if(_cp_host_arch MATCHES "^(x86_64|amd64|i[3-6]86|x86)$")
+        message(STATUS "Setting bitness flag -m${BITNESS}")
+        set_property(
+          TARGET ${LIB_NAME}
+          APPEND_STRING
+          PROPERTY COMPILE_FLAGS " -m${BITNESS}")
+        set_property(
+          TARGET ${LIB_NAME}
+          APPEND_STRING
+          PROPERTY LINK_FLAGS " -m${BITNESS}")
+      else()
+        message(
+          STATUS
+            "Skipping bitness flag -m${BITNESS}: not applicable on ${CMAKE_SYSTEM_PROCESSOR}")
+      endif()
     endif()
   endif()
 
