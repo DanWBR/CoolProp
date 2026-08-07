@@ -549,7 +549,12 @@ runtime coverage; the native library does not exist on this machine yet.
 
 **Files:** Create `wrappers/DotNet/CoolProp.Net.Tests/`.
 
-- [ ] **Step 1: ABI width assertions**
+- [x] **Step 1: ABI width assertions**
+
+> Beyond the draft: `ManyConcurrentHandlesRemainUsable` allocates eight states at once, so both handle 0 and
+> handles above it cross the `CLong` boundary; and `BoolConfigTakesEffect` checks `set_config_bool` by its
+> effect, because the C API exposes no config getter — `get_global_param_string` rejects config keys. That
+> test asserts the `false` path restores the original behaviour too, so it cannot pass on a stuck flag.
 
 These fail loudly on a wrong `long` mapping instead of corrupting memory silently:
 
@@ -570,26 +575,42 @@ public void ParamIndexRoundTrips()
 }
 ```
 
-- [ ] **Step 2: Reference-value tests**
+- [x] **Step 2: Reference-value tests**
+
+> Anchored on the defining constants of the reference equations (IAPWS-95, Span-Wagner, Span et al.,
+> Tillner-Roth &amp; Baehr) rather than on numbers captured from this binding, which would only enshrine
+> whatever it currently does — including a marshalling bug.
+>
+> One finding: `Props1SI("R134a","Tcrit")` returns 374.21197 K, about 2 mK above the 374.21 K its own
+> fluid file tabulates, because `Tcrit` is the critical point *of the equation of state*. R134a therefore
+> carries a per-case tolerance instead of loosening all four and throwing away the precision of the three
+> that agree to under a millikelvin.
 
 Water at 300 K / 101325 Pa, R134a, a CO2 supercritical point, one incompressible, and one mixture — assert
 against values taken from the C++ Catch2 suite, not from the binding itself. Include a
 `HAPropsSI` case and a `PhaseSI` case.
 
-- [ ] **Step 3: Lifetime and error tests**
+- [x] **Step 3: Lifetime and error tests** — plus `FinalizerReleasesAnUndisposedHandle` and a
+500-cycle create/dispose loop, which would surface a handle-table leak.
 
 - `AbstractState` disposed twice does not throw and does not double-free.
 - An invalid backend string raises `CoolPropException` with a non-empty message (proves the error buffer is
   wired, not just the errcode).
 - A failing `PropsSI` surfaces `CoolPropException` rather than returning a sentinel double.
 
-- [ ] **Step 4: Run**
+- [x] **Step 4: Run** — **35 passed / 0 failed** on `win-x64`, against a locally built `CoolProp.dll`.
+
+No `LD_LIBRARY_PATH` juggling is needed: the test project copies
+`install_root/runtimes/$(RID)/native/*` into its output. A missing native is deliberately **not** a build
+error — the assembly must still compile on a machine that has never built the C++ side — so
+`NativeLibraryFixture` converts it into one readable failure instead of a swarm of `DllNotFoundException`s.
+Verified by renaming the DLL and re-running: every test fails with
+`The CoolProp native library could not be loaded for RID 'win-x64'. Build it first: …` rather than
+silently passing.
 
 ```bash
 dotnet test wrappers/DotNet/CoolProp.Net.Tests -c Release
 ```
-Expected: all green. The native library must be resolvable — run after Task 7 wires the RID assets, or set
-`LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH`/`PATH` to `install_root/runtimes/<rid>/native` for a local run.
 
 - [ ] **Step 5: Commit**
 
