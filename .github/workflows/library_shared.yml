@@ -27,7 +27,10 @@ jobs:
       # fail-fast: Default is true, switch to false to allow one platform to fail and still run others
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macOS-latest]
+        # ubuntu-24.04-arm is a native aarch64 runner (no QEMU, no cross
+        # toolchain) and supplies the linux-arm64 native. macOS-latest is
+        # itself arm64, so osx-x64 needs an explicit extra leg further down.
+        os: [windows-latest, ubuntu-latest, ubuntu-24.04-arm, macOS-latest]
 
     steps:
     - uses: actions/checkout@v7
@@ -130,6 +133,37 @@ jobs:
         echo "Building with -j$JOBS"
         cmake --build build_arm64 --target install -j "$JOBS" --config ${{ env.BUILD_TYPE }}
 
+    # macOS runners are arm64, so the default configure above yields osx-arm64.
+    # x86_64 needs its own leg — and its OWN install prefix: the legacy
+    # shared_library/Darwin/64bit path carries no architecture (the __arm64
+    # suffix is MSVC-only), so installing both arches into install_root would
+    # have this build silently replace the arm64 binary in the legacy artifact
+    # that is still published below.
+    - name: Configure CMake for macOS x86_64
+      if: startsWith(matrix.os, 'macOS')
+      run: cmake -B build_osx_x64 -S . -DCMAKE_BUILD_TYPE:STRING=${{ env.BUILD_TYPE }} -DCOOLPROP_SHARED_LIBRARY:BOOL=ON -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCOOLPROP_INSTALL_PREFIX=${{ github.workspace }}/install_root_osx_x64
+
+    - name: Build with CMake for macOS x86_64
+      if: startsWith(matrix.os, 'macOS')
+      shell: bash
+      run: |
+        JOBS=$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 2)
+        echo "Building with -j$JOBS"
+        cmake --build build_osx_x64 --target install -j "$JOBS" --config ${{ env.BUILD_TYPE }}
+
+    - name: Graft the macOS x86_64 native into the RID tree
+      if: startsWith(matrix.os, 'macOS')
+      shell: bash
+      run: |
+        set -euo pipefail
+        src="${{ github.workspace }}/install_root_osx_x64/runtimes/osx-x64"
+        if [ ! -d "$src" ]; then
+          echo "FAIL: $src missing — the x86_64 build did not produce an osx-x64 RID folder" >&2
+          exit 1
+        fi
+        mkdir -p install_root/runtimes
+        cp -Rf "$src" install_root/runtimes/
+        file install_root/runtimes/osx-x64/native/* || true
 
     # - name: Tar.gz the shared library to maintain case sensitivy and file permissions
     #   working-directory: ./install_root/shared_library/
@@ -145,6 +179,17 @@ jobs:
           # This is now requried by upload-artifact@v4, but will be merged later
           name: shared_library-${{ matrix.os }}
           path: install_root/shared_library
+
+    - name: Archive RID-keyed natives
+      uses: actions/upload-artifact@v7
+      with:
+          name: runtimes-${{ matrix.os }}
+          # win-x86 is excluded on purpose: it is out of scope for the .NET
+          # package, and the stdcall and cdecl 32-bit legs both install into
+          # runtimes/win-x86, so its contents would be whichever ABI ran last.
+          path: |
+            install_root/runtimes
+            !install_root/runtimes/win-x86/**
 
     # - name: Upload TGZ or ZIP to release
     #   if: contains(github.ref, 'refs/tags')
@@ -169,4 +214,46 @@ jobs:
         name: shared_library
         # Remove the old individual artifacts once merged
         delete-merged: true
+
+  merge_runtimes:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    # Safe to flatten into one tree only because every native now lives under
+    # runtimes/<rid>/native — see the COOLPROP_RID block in CMakeLists.txt.
+    # Merging the pre-RID layout would have let one architecture overwrite
+    # another without error.
+    - name: Merge runtime artifacts
+      uses: actions/upload-artifact/merge@v7
+      with:
+        pattern: runtimes-*
+        name: runtimes
+        delete-merged: true
+
+  verify_runtimes:
+    runs-on: ubuntu-latest
+    needs: merge_runtimes
+    steps:
+    - name: Download merged runtimes
+      uses: actions/download-artifact@v8
+      with:
+        name: runtimes
+        path: rt
+
+    - name: Assert all six desktop RIDs are present
+      shell: bash
+      run: |
+        set -euo pipefail
+        missing=0
+        for rid in win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64; do
+          if compgen -G "rt/$rid/native/*" > /dev/null; then
+            echo "ok   $rid"
+          else
+            echo "MISSING $rid" >&2
+            missing=1
+          fi
+        done
+        echo "--- tree ---"
+        find rt -mindepth 1 -maxdepth 2 -type d | sort
+        exit "$missing"
         

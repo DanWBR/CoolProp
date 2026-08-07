@@ -174,7 +174,7 @@ git commit --no-verify -m "build: install shared library into a RID-keyed folder
 
 **Files:** Modify `.github/workflows/library_shared.yml`.
 
-- [ ] **Step 1: Add a linux-arm64 leg**
+- [x] **Step 1: Add a linux-arm64 leg**
 
 Change the matrix at `:30`:
 ```yaml
@@ -187,7 +187,12 @@ to:
 `ubuntu-24.04-arm` is a native aarch64 runner — no QEMU, no cross-toolchain. The existing configure/build
 steps are architecture-agnostic and need no change.
 
-- [ ] **Step 2: Add an osx-x64 leg**
+- [x] **Step 2: Add an osx-x64 leg**
+
+> Implemented with one addition the draft below missed: the x86_64 leg must install into its **own**
+> prefix (`-DCOOLPROP_INSTALL_PREFIX=.../install_root_osx_x64`), then graft only `runtimes/osx-x64` into
+> `install_root`. Sharing `install_root` would have let the x64 build overwrite the arm64 binary in the
+> legacy, still-published `shared_library/Darwin/64bit` path — Defect 1 biting inside a single runner.
 
 `macos-latest` is arm64, so x64 must be requested explicitly. After the existing macOS build steps, add:
 
@@ -204,7 +209,11 @@ steps are architecture-agnostic and need no change.
         cmake --build build_osx_x64 --target install -j "$JOBS" --config ${{ env.BUILD_TYPE }}
 ```
 
-- [ ] **Step 3: Publish the RID tree as its own artifact**
+- [x] **Step 3: Publish the RID tree as its own artifact**
+
+> Implemented with `win-x86` excluded from the upload: it is out of scope for the package, and the stdcall
+> and cdecl 32-bit legs both install into `runtimes/win-x86`, so its contents would be whichever ABI ran
+> last.
 
 After the existing `Archive artifacts` step, add:
 
@@ -234,9 +243,14 @@ And add a merge job mirroring the existing one:
 > The merge is only safe because Task 1 made the paths RID-unique. Merging before Task 1 lands would
 > silently drop architectures.
 
-- [ ] **Step 4: Verify all six RIDs are present**
+- [ ] **Step 4: Verify all six RIDs are present** — PENDING a CI run.
 
-After pushing the branch:
+Rather than the manual `gh` check below, this is now enforced automatically by the `verify_runtimes` job,
+which fails the workflow when any of the six RIDs is absent. The guard was exercised locally against three
+cases: all-present (pass), directory removed (fail), and **directory present but empty** (fail) — the last
+is the one a `[ -d ... ]` test would have waved through.
+
+The manual equivalent, after pushing:
 ```bash
 gh run list --workflow=library_shared.yml --branch "$(git branch --show-current)" --limit 1
 gh run download <run-id> -n runtimes -D /tmp/rt
