@@ -43,9 +43,18 @@ internal static class Errors
             return value;
         }
 
-        string reason = GetGlobalErrorString();
         throw new CoolPropException(
-            reason.Length == 0 ? $"{context} failed and reported no error message." : reason);
+            GetGlobalErrorStringOr($"{context} failed and reported no error message."));
+    }
+
+    /// <summary>
+    /// The global error string, or <paramref name="fallback"/> when the native
+    /// side left it empty.
+    /// </summary>
+    internal static string GetGlobalErrorStringOr(string fallback)
+    {
+        string reason = GetGlobalErrorString();
+        return reason.Length == 0 ? fallback : reason;
     }
 
     /// <summary>
@@ -65,7 +74,7 @@ internal static class Errors
     /// Decodes a NUL-terminated UTF-8 buffer. A buffer the native side filled
     /// completely has no terminator, so fall back to the whole span.
     /// </summary>
-    private static string DecodeMessage(ReadOnlySpan<byte> buffer)
+    internal static string DecodeMessage(ReadOnlySpan<byte> buffer)
     {
         int nul = buffer.IndexOf((byte)0);
         return Encoding.UTF8.GetString(nul < 0 ? buffer : buffer[..nul]);

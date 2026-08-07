@@ -507,32 +507,41 @@ git commit --no-verify -m "feat(dotnet): C API P/Invoke layer, SafeHandle, error
 
 **Files:** Create `CoolProp.cs`, `AbstractState.cs`.
 
-- [ ] **Step 1: Static entry points**
+- [x] **Step 1: Static entry points** — split into three classes rather than one. The draft's
+`CoolProp.PropsSI(...)` is not usable: a type named `CoolProp` inside namespace `CoolProp` makes every
+qualified reference within that namespace ambiguous. Shipped as `Props` (calculations), `Config`
+(process-wide settings) and `Information` (metadata and index lookups).
+
+> **Return conventions differ between functions and were verified individually, not assumed.**
+> `get_*_string`, `PhaseSI`, `set_reference_state*` return **1 on success / 0 on failure**.
+> `C_extract_backend` is inverted: **0 on success / -1 on failure** — the first draft of
+> `ExtractBackend` had the test backwards and would have thrown on success while returning
+> garbage buffers on failure. `C_is_valid_fluid_string` returns 1/0 but **-1 when the check itself
+> threw**, so the test must be `== 1`; a `!= 0` test reports the error case as valid.
 
 `CoolProp.PropsSI(...)`, `Props1SI`, `HAPropsSI`, `PhaseSI`, `GetGlobalParamString`, `GetFluidParamString`,
 `SetConfig*`, `GetParamIndex`, `GetInputPairIndex`. String outputs go through a pooled `byte[]` and
 `Encoding.UTF8`; use `get_fluid_param_string_len` to size the buffer where available rather than guessing.
 
-- [ ] **Step 2: `AbstractState` wrapper**
+- [x] **Step 2: `AbstractState` wrapper**
+
+> Native calls run inside a `Lease` that takes a `DangerousAddRef`/`DangerousRelease` pair, so the
+> finalizer cannot free the state underneath an in-flight call.
+>
+> The probe-and-grow contract is sharper than the draft assumed: the vector getters write `N`
+> (the required size) **before** rejecting an undersized buffer, so the retry is exact rather than a
+> doubling guess. `GetPhaseEnvelope` needs only one probe, not two — `actual_length` comes from a
+> zero-length call and the component count from the composition.
 
 An `IDisposable` class over `AbstractStateHandle` exposing `Update`, `KeyedOutput`, the derivative family,
 `SetFractions`, `MoleFractions`, `BuildPhaseEnvelope`, `PhaseEnvelopeData`, fugacities, and critical points.
 Vector-returning functions follow a `maxN` in / `N` out contract — call with a probe buffer and grow, never
 assume a fixed length.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify** — `dotnet build -c Release --no-incremental`: 0 warnings, 0 errors. Still no
+runtime coverage; the native library does not exist on this machine yet.
 
-```bash
-dotnet build wrappers/DotNet/CoolProp.Net/CoolProp.Net.csproj -c Release
-```
-Expected: zero warnings.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add wrappers/DotNet/
-git commit --no-verify -m "feat(dotnet): idiomatic CoolProp and AbstractState surface"
-```
+- [x] **Step 4: Commit**
 
 ---
 
