@@ -26,6 +26,8 @@ Web/fluid_properties/fluids/molecule_geometry_status.md
 
 /wrappers/Python/build
 /wrappers/Python/cmake_build
+/wrappers/DotNet/**/bin/
+/wrappers/DotNet/**/obj/
 /wrappers/Python/CoolProp.egg-info
 /wrappers/Python/dist
 /wrappers/Python/CoolProp/*.o

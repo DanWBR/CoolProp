@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>CoolProp.Net</AssemblyName>
+    <RootNamespace>CoolProp</RootNamespace>
+
+    <!-- Required by the LibraryImport source generator, which emits code in
+         unsafe blocks for the marshalling stubs. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Implies IsTrimmable, EnableTrimAnalyzer, EnableAotAnalyzer and
+         EnableSingleFileAnalyzer. Combined with TreatWarningsAsErrors from
+         Directory.Build.props, an AOT-hostile construct fails this build
+         instead of failing at a consumer's `dotnet publish`. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+</Project>

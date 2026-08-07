@@ -277,7 +277,16 @@ git commit --no-verify -m "ci: build linux-arm64 and osx-x64 shared libraries
 
 **Files:** Create `wrappers/DotNet/Directory.Build.props`, `wrappers/DotNet/CoolProp.Net/CoolProp.Net.csproj`.
 
-- [ ] **Step 1: Shared build properties**
+- [x] **Step 1: Shared build properties**
+
+> Implemented with two additions the draft below missed:
+> (a) an `Import` chaining to a future repo-root `Directory.Build.props`, so this file scopes .NET
+> settings to `wrappers/DotNet` instead of silently shadowing a root one added later. The path must be
+> resolved into a property first — MSBuild's condition parser rejects the nested quotes of an inline
+> `GetPathOfFileAbove` call (`MSB4092`).
+> (b) `.gitignore` rules for `/wrappers/DotNet/**/bin/` and `obj/`. The repo's existing patterns are
+> `*.obj` (C++ object files) and `/build*/`; neither covers .NET output, so `bin`/`obj` would have shown
+> up as untracked.
 
 `wrappers/DotNet/Directory.Build.props`:
 ```xml
@@ -293,7 +302,10 @@ git commit --no-verify -m "ci: build linux-arm64 and osx-x64 shared libraries
 </Project>
 ```
 
-- [ ] **Step 2: The binding csproj**
+- [x] **Step 2: The binding csproj**
+
+> `IsTrimmable`, `EnableTrimAnalyzer` and `EnableAotAnalyzer` are dropped from the draft below —
+> `IsAotCompatible=true` already implies all three (plus `EnableSingleFileAnalyzer`).
 
 `wrappers/DotNet/CoolProp.Net/CoolProp.Net.csproj`:
 ```xml
@@ -313,7 +325,8 @@ git commit --no-verify -m "ci: build linux-arm64 and osx-x64 shared libraries
 `IsAotCompatible` turns on the trim and AOT analyzers; combined with `TreatWarningsAsErrors`, any
 AOT-hostile construct fails the build rather than failing at a customer's publish step.
 
-- [ ] **Step 3: Verify it builds empty**
+- [x] **Step 3: Verify it builds empty** — `dotnet build -c Release` on SDK 10.0.302: 0 warnings,
+0 errors, output `bin/Release/net10.0/CoolProp.Net.dll`.
 
 ```bash
 dotnet build wrappers/DotNet/CoolProp.Net/CoolProp.Net.csproj -c Release

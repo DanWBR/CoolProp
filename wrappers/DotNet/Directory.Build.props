@@ -1,0 +1,21 @@
+<Project>
+
+  <!-- Chain to a repo-root Directory.Build.props if one is ever added, so this
+       file scopes .NET settings to wrappers/DotNet without shadowing it.
+       Resolved into a property first: MSBuild's condition parser cannot handle
+       the nested quotes of an inline GetPathOfFileAbove call. -->
+  <PropertyGroup>
+    <_ParentBuildProps>$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))</_ParentBuildProps>
+  </PropertyGroup>
+  <Import Project="$(_ParentBuildProps)" Condition="'$(_ParentBuildProps)' != ''" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+</Project>
