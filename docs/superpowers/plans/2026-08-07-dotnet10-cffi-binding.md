@@ -819,17 +819,25 @@ run will show which.
 python -c "import yaml; yaml.safe_load(open('.github/workflows/dotnet_builder.yml')); print('YAML OK')"
 ```
 
-- [x] **Step 3: Register in the release pipeline**
+- [~] **Step 3: Register in the release pipeline** — **superseded.** `release_all_files.yml` no longer
+exists.
 
-Add `dotnet_builder.yml` to the `collect_binaries` matrix in
-`.github/workflows/release_all_files.yml:73`.
+Enabling Actions made the cost concrete: one push fired **11 workflows** at once (Python wheels,
+documentation ×3, Java, Windows installer, LibreOffice, Mathcad, Catch2). At the owner's direction the
+fork now keeps **only the two workflows that serve the .NET deliverable**:
 
-> **Not done, and out of scope:** 14 other workflows still trigger on pushes to branches —
-> `dev_checks`, `dev_msvc`, `docs_devdocs-run`, `docs_docker-build`, `docs_docker-run`, `gui_builder`,
-> `java_builder`, `javascript_builder`, `libreoffice_builder`, `mathcad_builder`, `python_buildwheels`,
-> `release_all_files`, `test_catch2`, `windows_installer`. Enabling Actions will fire all of them on the
-> next push. Only the two workflows this plan owns were made tag-only; restricting the rest is a
-> repository-wide decision for the owner.
+| Workflow | Purpose |
+|---|---|
+| `library_shared.yml` | builds and verifies the six native libraries |
+| `dotnet_builder.yml` | tests them on x64 + arm64, runs the AOT probe, packs the NuGet |
+
+The other 19 files (18 workflows plus the two REFPROP helper scripts they used) were deleted. Both keepers
+are self-contained — neither uses `uses: ./` nor `workflow_call` — so nothing dangles.
+
+**Consequence worth stating plainly:** upstream CoolProp CI is gone from this fork. There is no longer a
+Catch2 run, a cppcheck/CodeQL sweep, or a wheel build on any trigger. `./dev/ci/preflight.sh` is now the
+**only** quality gate, and it is local and voluntary. Merging from `CoolProp/CoolProp` will also conflict
+on every deleted file.
 
 - [ ] **Step 4: Commit**
 
