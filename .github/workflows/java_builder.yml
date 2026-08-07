@@ -1,11 +1,10 @@
 name: Java Wrapper
 
+# Tag-only: per-push CI is too expensive for this fork.
 on:
   push:
-    branches: [ 'master', 'main', 'develop' ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ 'master', 'main', 'develop' ]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

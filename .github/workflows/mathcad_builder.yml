@@ -1,12 +1,10 @@
 name: Mathcad wrapper
 
+# Tag-only: per-push CI is too expensive for this fork.
 on:
-  # ========= Run on Pushes and Pull_Requests
   push:
-    branches: [ 'master', 'main', 'develop', 'actions_mathcad' ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ 'master', 'main', 'develop' ]
+  workflow_dispatch:
   # ========= Run on call from other workflows
   workflow_call:
 

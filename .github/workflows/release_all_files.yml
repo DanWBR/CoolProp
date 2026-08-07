@@ -1,12 +1,9 @@
 name: Release workflow run
 
+# Tag-only: per-push CI is too expensive for this fork.
 on:
   push:
-    branches: [ 'feature/automated_release' ]
-  #   branches: [ 'master', 'main', 'develop', 'feature/automated_release' ]
-  #   tags: [ 'v*' ]
-  # pull_request:
-  #   branches: [ 'master', 'main', 'develop' ]
+    tags: [ 'v*' ]
   schedule:
     - cron: '0 2 * * *' # daily
   workflow_dispatch:

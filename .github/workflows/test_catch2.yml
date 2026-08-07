@@ -1,13 +1,11 @@
 name: Testing Catch2
 
+# Tag-only: per-push CI is too expensive for this fork. The local pre-push gate
+# (dev/ci/preflight.sh) still runs the Catch2 suite before every push.
 on:
   push:
-    branches: [ 'master', 'main', 'develop', 'actions_tests' ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ 'master', 'main', 'develop' ]
-  #schedule:
-  #  - cron: '15 8 * * 3' # Run weekly
+  workflow_dispatch:
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)

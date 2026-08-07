@@ -18,11 +18,11 @@ name: Development checks
 #   type-stubs   — push to master + PR (build-free; gates the checked-in
 #                  Cython type stubs). No paths filter so it can be required.
 
+# Tag-only: per-push CI is too expensive for this fork. Scheduled runs below
+# are kept — they are low frequency, not per commit.
 on:
   push:
-    branches: [master]
-  pull_request:
-    branches: [master, main, develop]
+    tags: [ 'v*' ]
   schedule:
     - cron: '15 8 * * 0'    # weekly Sunday — cppcheck, iwyu fallback
     - cron: '15 8 * * 0,4'  # twice weekly Sun+Thu — codeql fallback

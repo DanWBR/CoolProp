@@ -8,13 +8,10 @@
 
 name: Development Microsoft C++ Code Analysis
 
+# Tag-only: per-push CI is too expensive for this fork.
 on:
   push:
-    branches: [ 'dev_checks' ]
-  #  branches: [ 'master', 'main', 'develop', 'dev_checks' ]
-  #  tags: [ 'v*' ]
-  #pull_request:
-  #  branches: [ 'master', 'main', 'develop' ]
+    tags: [ 'v*' ]
   schedule:
     - cron: '15 8 * * 0,4' # Run twice a week
   workflow_dispatch:

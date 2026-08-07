@@ -1,11 +1,10 @@
 name: Javascript library
 
+# Tag-only: per-push CI is too expensive for this fork.
 on:
   push:
-    branches: [ 'master', 'main', 'develop', 'actions_javascript' ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ 'master', 'main', 'develop' ]
+  workflow_dispatch:
 
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)

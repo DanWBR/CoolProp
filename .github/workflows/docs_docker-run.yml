@@ -10,11 +10,9 @@ on:
         description: 'Build expensive docs'
         required: false
         type: boolean
+  # Tag-only: per-push CI is too expensive for this fork.
   push:
-    branches: [ 'master', 'main', 'develop', 'actions_docs' ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ 'master', 'main', 'develop' ]
 
 concurrency:
   # Cancel superseded runs on the same ref to cut CI backlog on heavy

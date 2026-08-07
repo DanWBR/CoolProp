@@ -4,27 +4,11 @@ name: GUI builder
 # CoolProp is compiled as a static library inside the GUI's build.rs, so this
 # workflow also exercises that build path on each platform.
 
+# Tag-only: per-push CI is too expensive for this fork. The path filters went
+# with the branch trigger — they only ever narrowed push and pull_request.
 on:
   push:
-    branches: [master, main, develop, ib/GUI]
-    paths:
-      - 'wrappers/GUI/**'
-      - 'include/**'
-      - 'src/**'
-      - 'externals/**'
-      - 'CMakeLists.txt'
-      - 'cmake/**'
-      - '.github/workflows/gui_builder.yml'
     tags: ['gui-v*']
-  pull_request:
-    paths:
-      - 'wrappers/GUI/**'
-      - 'include/**'
-      - 'src/**'
-      - 'externals/**'
-      - 'CMakeLists.txt'
-      - 'cmake/**'
-      - '.github/workflows/gui_builder.yml'
   workflow_dispatch:
 
 concurrency:

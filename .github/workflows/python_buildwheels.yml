@@ -11,13 +11,12 @@ name: Python cibuildwheel
 # build (via the `labeled` event type); other label changes are ignored
 # by the gate in `set-matrix`.
 
+# Tag-only: per-push CI is too expensive for this fork. This one fans out to
+# dozens of cibuildwheel legs, so it was among the most costly.
 on:
   push:
-    branches: [ 'master', 'main', 'develop', 'actions_pypi' ]
     tags: [ 'v*' ]
-  pull_request:
-    branches: [ 'master', 'main', 'develop' ]
-    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
 
 concurrency:
   # Cancel superseded runs on the same ref to cut CI backlog on heavy
