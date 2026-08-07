@@ -710,11 +710,59 @@ if(COOLPROP_OBJECT_LIBRARY
 	else()
 		set(OUTPUT_FOLDER "shared_library/${CMAKE_SYSTEM_NAME}/${BITNESS}bit${CONVENTION}")
 	endif()
-	
+
+    # Map (system, arch) onto the .NET RID that NuGet uses to select natives.
+    # OUTPUT_FOLDER above is NOT architecture-unique off Windows: the __arm64
+    # suffix is MSVC-only, so a Linux/macOS x64 build and an arm64 build both
+    # land in shared_library/<System>/64bit and silently overwrite each other
+    # when the per-OS CI artifacts are merged.
+    #
+    # CMAKE_SYSTEM_PROCESSOR is the HOST arch and is therefore wrong for cross
+    # builds, so prefer CMAKE_VS_PLATFORM_NAME (MSVC -A ARM64) and
+    # CMAKE_OSX_ARCHITECTURES (-DCMAKE_OSX_ARCHITECTURES=x86_64) where set.
+    if(MSVC AND CMAKE_VS_PLATFORM_NAME)
+      string(TOLOWER "${CMAKE_VS_PLATFORM_NAME}" _cp_arch)
+    elseif(APPLE AND CMAKE_OSX_ARCHITECTURES)
+      string(TOLOWER "${CMAKE_OSX_ARCHITECTURES}" _cp_arch)
+    else()
+      string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _cp_arch)
+    endif()
+
+    if(_cp_arch MATCHES "^(arm64|aarch64)$")
+      set(_cp_arch "arm64")
+    elseif(_cp_arch MATCHES "^(x64|x86_64|amd64)$")
+      set(_cp_arch "x64")
+    elseif(_cp_arch MATCHES "^(win32|x86|i[3-6]86)$")
+      set(_cp_arch "x86")
+    else()
+      # Includes a universal2 build (CMAKE_OSX_ARCHITECTURES="x86_64;arm64"),
+      # which has no single RID. Warn rather than emit a wrong one.
+      message(WARNING "CoolProp: unrecognized target architecture '${_cp_arch}'; "
+                      "the RID-keyed install path will not be usable by NuGet.")
+    endif()
+
+    if(WIN32)
+      set(COOLPROP_RID "win-${_cp_arch}")
+    elseif(APPLE)
+      set(COOLPROP_RID "osx-${_cp_arch}")
+    else()
+      set(COOLPROP_RID "linux-${_cp_arch}")
+    endif()
+    message(STATUS "COOLPROP_RID: ${COOLPROP_RID}")
+
     install(
       TARGETS ${LIB_NAME}
       DESTINATION ${OUTPUT_FOLDER}
     )
+    # RID-keyed copy consumed by the .NET NuGet packaging step. Additive on
+    # purpose: the legacy layout above still feeds the SourceForge tree and the
+    # Windows installer.
+    # RUNTIME covers the Windows .dll, LIBRARY the Unix .so/.dylib. ARCHIVE is
+    # deliberately omitted: that is the Windows import .lib, which a NuGet
+    # runtimes/ asset must not carry.
+    install(TARGETS ${LIB_NAME}
+            RUNTIME DESTINATION "runtimes/${COOLPROP_RID}/native"
+            LIBRARY DESTINATION "runtimes/${COOLPROP_RID}/native")
     install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/${COOLPROP_LIBRARY_HEADER}
             DESTINATION shared_library)
     # GH #1280: ship the installable C++ header tree (+ flat back-compat shims,

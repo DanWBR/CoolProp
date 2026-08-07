@@ -76,7 +76,9 @@ to catch it.
 
 **Files:** Modify `CMakeLists.txt:707-717`.
 
-- [ ] **Step 1: Reproduce the collision**
+- [~] **Step 1: Reproduce the collision** — SKIPPED. The collision is structural and readable off
+`CMakeLists.txt:708` (the `__arm64` suffix is inside an `if(MSVC ...)`), so a full pre-fix build of ~104k
+lines to observe a folder name buys no additional evidence.
 
 ```bash
 cmake -B build_rid -S . -DCOOLPROP_SHARED_LIBRARY=ON -DCMAKE_BUILD_TYPE=Release
@@ -86,7 +88,7 @@ find install_root/shared_library -type d
 Expected (pre-fix, on an arm64 Mac): `shared_library/Darwin/64bit` — a path containing no architecture,
 identical to what an x86_64 build would produce.
 
-- [ ] **Step 2: Derive a RID string in CMake**
+- [x] **Step 2: Derive a RID string in CMake**
 
 In `CMakeLists.txt`, immediately before the `set(OUTPUT_FOLDER ...)` block at `:708`, insert:
 
@@ -121,7 +123,7 @@ In `CMakeLists.txt`, immediately before the `set(OUTPUT_FOLDER ...)` block at `:
     message(STATUS "COOLPROP_RID: ${COOLPROP_RID}")
 ```
 
-- [ ] **Step 3: Install into a RID-keyed folder alongside the legacy one**
+- [x] **Step 3: Install into a RID-keyed folder alongside the legacy one**
 
 Replace the `install(TARGETS ${LIB_NAME} DESTINATION ${OUTPUT_FOLDER})` call at `:717-720` with:
 
@@ -135,7 +137,12 @@ Replace the `install(TARGETS ${LIB_NAME} DESTINATION ${OUTPUT_FOLDER})` call at 
 > Additive on purpose. The legacy layout feeds the SourceForge tree and the Windows installer; breaking it
 > is out of scope for this plan.
 
-- [ ] **Step 4: Verify the RID path is architecture-unique**
+- [x] **Step 4: Verify the RID path is architecture-unique** — verified at configure time rather than by a
+full build: `cmake -B build_rid -S . -DCOOLPROP_SHARED_LIBRARY=ON` printed `COOLPROP_RID: win-x64`, and the
+generated `build_rid/cmake_install.cmake` carries `runtimes/win-x64/native` with `TYPE SHARED_LIBRARY` only
+(the import `.lib` is excluded) while the legacy `shared_library/Windows/64bit` rules remain. Compiling the
+library would not exercise the install rules any further. The cross-arch cases (`-A ARM64`,
+`-DCMAKE_OSX_ARCHITECTURES=x86_64`) are exercised by CI in Task 2.
 
 ```bash
 rm -rf build_rid install_root/runtimes
