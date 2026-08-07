@@ -1,0 +1,26 @@
+<Project>
+
+  <!--
+    Copies the RID-keyed native library into a consuming project's output.
+    Shared by the test project and the AOT probe so the two cannot drift.
+
+    Locally the tree comes from the CMake install target; in CI it is the
+    `runtimes` artifact from library_shared.yml unpacked at the repository root.
+
+    A missing native is deliberately NOT a build error here: the managed
+    assemblies must still compile on a machine that has never built the C++
+    side. Consumers surface the absence at run time instead — the test project
+    through NativeLibraryFixture, the AOT probe through its own exit code.
+  -->
+  <PropertyGroup>
+    <CoolPropRid Condition="'$(CoolPropRid)' == ''">$(RuntimeIdentifier)</CoolPropRid>
+    <CoolPropRid Condition="'$(CoolPropRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</CoolPropRid>
+    <CoolPropRid Condition="'$(CoolPropRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</CoolPropRid>
+    <CoolPropNativeDir>$(MSBuildThisFileDirectory)..\..\install_root\runtimes\$(CoolPropRid)\native\</CoolPropNativeDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="Exists('$(CoolPropNativeDir)')">
+    <None Include="$(CoolPropNativeDir)*" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+</Project>

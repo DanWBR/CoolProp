@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+
+    <!-- The point of this project: if any part of the binding is AOT-hostile,
+         `dotnet publish` emits IL2xxx/IL3xxx warnings, which TreatWarningsAsErrors
+         from Directory.Build.props turns into a failed publish. -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <Import Project="..\native-assets.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\CoolProp.Net\CoolProp.Net.csproj" />
+  </ItemGroup>
+
+</Project>

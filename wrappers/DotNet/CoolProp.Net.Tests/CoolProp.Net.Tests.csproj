@@ -4,22 +4,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
-  <!-- Locate the native library for the RID being tested. Locally this is the
-       tree produced by the CMake install target; in CI it is the `runtimes`
-       artifact from library_shared.yml unpacked at the repo root.
-       Missing natives are NOT a build error: the assembly must still compile on
-       a machine that has never built the C++ side. NativeLibraryFixture turns
-       the absence into a readable test failure instead. -->
-  <PropertyGroup>
-    <CoolPropRid Condition="'$(CoolPropRid)' == ''">$(RuntimeIdentifier)</CoolPropRid>
-    <CoolPropRid Condition="'$(CoolPropRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</CoolPropRid>
-    <CoolPropRid Condition="'$(CoolPropRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</CoolPropRid>
-    <CoolPropNativeDir>$(MSBuildThisFileDirectory)..\..\..\install_root\runtimes\$(CoolPropRid)\native\</CoolPropNativeDir>
-  </PropertyGroup>
-
-  <ItemGroup Condition="Exists('$(CoolPropNativeDir)')">
-    <None Include="$(CoolPropNativeDir)*" CopyToOutputDirectory="PreserveNewest" Visible="false" />
-  </ItemGroup>
+  <Import Project="..\native-assets.props" />
 
   <ItemGroup>
     <ProjectReference Include="..\CoolProp.Net\CoolProp.Net.csproj" />

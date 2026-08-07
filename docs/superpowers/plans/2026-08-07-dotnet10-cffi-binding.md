@@ -724,21 +724,49 @@ git commit --no-verify -m "build(dotnet): multi-RID NuGet packaging with missing
 
 **Files:** Create `wrappers/DotNet/CoolProp.Net.AotProbe/`.
 
-- [ ] **Step 1: A console probe**
+- [x] **Step 1: A console probe**
 
 A minimal app calling `PropsSI` and one `AbstractState` round-trip, with
 `<PublishAot>true</PublishAot>` and `<InvariantGlobalization>true</InvariantGlobalization>`.
 
-- [ ] **Step 2: Publish and run**
+> The probe **asserts against reference values and exits non-zero on mismatch**. A probe that merely runs
+> would pass even if AOT had silently broken the marshalling — precisely the failure this task exists to
+> detect.
+>
+> The RID-native copy logic moved out of the test project into a shared
+> `wrappers/DotNet/native-assets.props`, imported by both, so the two cannot drift.
 
-```bash
-dotnet publish wrappers/DotNet/CoolProp.Net.AotProbe -c Release -r linux-x64
-./wrappers/DotNet/CoolProp.Net.AotProbe/bin/Release/net10.0/linux-x64/publish/CoolProp.Net.AotProbe
+- [x] **Step 2: Publish and run** — published for `win-x64` with **no `IL2xxx`/`IL3xxx` warnings**
+(`TreatWarningsAsErrors` would have failed the publish) and all 8 probes passed:
+
 ```
-Expected: publishes with no `IL2xxx`/`IL3xxx` warnings and prints the expected water property.
-This is what the SWIG path cannot do — its exception helper registers static delegates via reverse P/Invoke.
+NativeAOT probe | RID win-x64 | CLong 4 bytes
+ok   native version          = 8.0.1dev
+ok   water Tsat @ 1 atm      = 373.1242958   (expected 373.1243)
+ok   water Tcrit             = 647.096
+ok   humid air enthalpy      = 50423.45039
+ok   unknown param index     = -1
+ok   AbstractState density   = 55317.35277
+ok   mixture composition     = [0.7, 0.3]
+ok   invalid backend throws  = Error: Invalid backend name [NOT_A_BACKEND] to factory function
+AOT PROBE PASSED
+```
 
-- [ ] **Step 3: Commit**
+The published output is a **1.25 MB self-contained executable** plus the 9.4 MB native — no .NET runtime
+required. This is what the SWIG path cannot do: its exception helper registers static delegates via
+reverse P/Invoke.
+
+**Local Windows prerequisite:** the ILCompiler shells out to `vswhere.exe` to find the MSVC linker, and it
+is not on `PATH` by default even with Visual Studio installed. Without it the publish fails at the native
+link step with `MSB3073 ... exited with code 123`. Prepend it:
+
+```powershell
+$env:PATH = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer;$env:PATH"
+```
+
+GitHub's `windows-latest` runners already have it on `PATH`.
+
+- [x] **Step 3: Commit**
 
 ```bash
 git add wrappers/DotNet/
