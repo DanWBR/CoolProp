@@ -354,7 +354,11 @@ resolves all three from the bare name `"CoolProp"` — no `DllImportResolver` is
 Calling convention is plain cdecl on every 64-bit target: `CMakeLists.txt:625-632` forces `CONVENTION` empty
 for `BITNESS=64`, and it reaches the compiler as `-DCONVENTION=` (`CMakeLists.txt:864`).
 
-- [ ] **Step 1: Declare the imports**
+- [x] **Step 1: Declare the imports** — 72 of the header's 75 exports are bound. The three omitted are the
+Fortran shims `propssi_`, `hapropssi_` and `haprops_`, which exist for Fortran's calling convention and
+have no use from .NET. Beyond the draft below: `resdim1`/`resdim2` on `Props1SImulti`/`PropsSImulti` are
+**in/out** (the caller passes the allocated size, the callee overwrites it), so they are `ref`, not `out`;
+and deprecated `Props` takes single C `char` values by value, bound as `byte`.
 
 `Interop/NativeMethods.cs` — note `CLong` everywhere the C header says `long`:
 
@@ -403,7 +407,12 @@ internal static partial class NativeMethods
 }
 ```
 
-- [ ] **Step 2: Error unwrapping helper**
+- [x] **Step 2: Error unwrapping helper**
+
+> Two conventions verified against the C++ rather than assumed: `_HUGE` is `HUGE_VAL`
+> (`include/CoolProp/numerics/numerics.h:18`), i.e. infinity, so `!double.IsFinite` is the right sentinel
+> test; and `get_global_param_string` returns **1 on success, 0 on failure**
+> (`src/CoolPropLib.cpp`), so the reader must not treat 0 as success.
 
 Functions in the `AbstractState_*` family report failure through `long* errcode` plus a caller-supplied
 `char*` buffer. Centralise it in `Errors.cs`:
@@ -428,7 +437,14 @@ sentinel value and stash the reason in `get_global_param_string("errstring", ...
 `include/CoolProp/CoolPropLib.h:85-88`). Detect a non-finite / sentinel result and surface the same
 exception type so callers see one error model.
 
-- [ ] **Step 3: SafeHandle for the state handle**
+- [x] **Step 3: SafeHandle for the state handle**
+
+> **The draft below is wrong and was not used.** It declares
+> `IsInvalid => handle == IntPtr.Zero`, but `AbstractStateLibrary::add`
+> (`src/CoolPropLib.cpp:487-491`) hands out indices starting at **0**, and
+> `AbstractState_factory` returns **-1** on failure. Treating 0 as invalid would
+> make `SafeHandle` skip `ReleaseHandle` for the first state created in the
+> process, leaking it. The implementation uses -1 as the invalid sentinel.
 
 `AbstractState_factory` returns an opaque `long` that must be released via `AbstractState_free`. Wrap it in a
 `SafeHandle` so a dropped reference cannot leak a native state:
@@ -449,7 +465,17 @@ internal sealed class AbstractStateHandle : SafeHandle
 }
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify** — `dotnet build -c Release`: 0 warnings, 0 errors. Static checks beyond the draft,
+run against the generator output (`-p:EmitCompilerGeneratedFiles=true`):
+
+| Check | Result |
+|---|---|
+| Stubs generated | 72, all `DllImportAttribute("CoolProp", ExactSpelling = true)` |
+| Entry points absent from the C header | **0** — nothing can raise `EntryPointNotFound` |
+| Raw `long` in any P/Invoke signature | **0** (86 `CLong` uses) |
+
+What this does **not** prove: that the marshalling is correct at runtime, or that `CLong` behaves on LP64.
+Both need the native library, which has not been built here — see Task 6.
 
 ```bash
 dotnet build wrappers/DotNet/CoolProp.Net/CoolProp.Net.csproj -c Release
