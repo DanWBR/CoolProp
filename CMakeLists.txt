@@ -757,12 +757,26 @@ if(COOLPROP_OBJECT_LIBRARY
     # RID-keyed copy consumed by the .NET NuGet packaging step. Additive on
     # purpose: the legacy layout above still feeds the SourceForge tree and the
     # Windows installer.
-    # RUNTIME covers the Windows .dll, LIBRARY the Unix .so/.dylib. ARCHIVE is
-    # deliberately omitted: that is the Windows import .lib, which a NuGet
-    # runtimes/ asset must not carry.
-    install(TARGETS ${LIB_NAME}
-            RUNTIME DESTINATION "runtimes/${COOLPROP_RID}/native"
-            LIBRARY DESTINATION "runtimes/${COOLPROP_RID}/native")
+    # Install exactly one file: the real library, under the plain loadable name.
+    #
+    # install(TARGETS) is not used here. Because the target carries VERSION and
+    # SOVERSION, it would also emit the SONAME aliases on Linux
+    # (libCoolProp.so.8, libCoolProp.so.8.0.1dev). Locally those are symlinks
+    # and cost nothing, but GitHub artifacts do not preserve symlinks -- they
+    # arrive as full, byte-identical copies, tripling the Linux payload. It
+    # would also drag in the Windows import .lib, which a NuGet runtimes/ asset
+    # must not carry.
+    #
+    # DllImport("CoolProp") probes only the plain name, so that is all that is
+    # shipped. The name is assembled rather than taken from TARGET_FILE_NAME
+    # because on Linux the latter is the versioned file, and a DEBUG_POSTFIX
+    # build would otherwise install a "CoolPropd.dll" that no consumer can load.
+    set(COOLPROP_RID_FILENAME
+        "${CMAKE_SHARED_LIBRARY_PREFIX}${LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    install(
+      FILES $<TARGET_FILE:${LIB_NAME}>
+      DESTINATION "runtimes/${COOLPROP_RID}/native"
+      RENAME "${COOLPROP_RID_FILENAME}")
     install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/${COOLPROP_LIBRARY_HEADER}
             DESTINATION shared_library)
     # GH #1280: ship the installable C++ header tree (+ flat back-compat shims,
